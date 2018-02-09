@@ -10,7 +10,6 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
   .settings(publishSettings: _*)
   .settings(scalaMacroDependencies: _*)
   .settings(libraryDependencies += "com.propensive" %% "magnolia" % "0.6.1")
-  .settings(libraryDependencies += "com.google.cloud" % "google-cloud-datastore" % "1.14.0")
   .settings(moduleName := "adversaria")
 
 lazy val coreJVM = core.jvm
