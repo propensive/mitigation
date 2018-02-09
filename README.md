@@ -1,3 +1,8 @@
+[![Latest version](https://index.scala-lang.org/propensive/adversaria/latest.svg)](https://index.scala-lang.org/propensive/adversaria)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.propensive/adversaria_2.12/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.propensive/adversaria_2.12)
+
+[![Join the chat at https://gitter.im/propensive/adversaria](https://badges.gitter.im/propensive/adversaria.svg)](https://gitter.im/propensive/adversaria?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 # Adversaria
 
 Adversaria is a very tiny library which provides a few tools for working with
@@ -17,6 +22,15 @@ Currently there are three use cases:
 
 We expect the list of supported use cases to grow as additional suggestions are
 received.
+
+## Availability
+
+An early release of Adversaria is available on Maven Central, and can be
+included in an sbt project by including,
+```
+"com.propensive" %% "adversaria" % "0.1.0"
+```
+in your `build.sbt` file.
 
 ## Examples
 
