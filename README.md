@@ -28,7 +28,7 @@ received.
 An early release of Adversaria is available on Maven Central, and can be
 included in an sbt project by including,
 ```
-"com.propensive" %% "adversaria" % "0.1.0"
+"com.propensive" %% "adversaria" % "0.2.0"
 ```
 in your `build.sbt` file.
 
