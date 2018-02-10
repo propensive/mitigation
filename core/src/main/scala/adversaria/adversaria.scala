@@ -2,70 +2,112 @@ package adversaria
 
 import annotation.StaticAnnotation
 import annotation.implicitNotFound
-import language.experimental.macros
-import collection.immutable.ListMap
+import language.experimental.macros, language.implicitConversions
 
 import scala.reflect._, reflect.macros._
 
+/** macro implementations */
 object Macros {
-  
-  def typeAnnotations[T: c.WeakTypeTag](c: blackbox.Context): c.Tree = {
-    import c.universe._
-    val sym = c.weakTypeOf[T].typeSymbol
-    val typeAnnotations = sym.annotations.map(_.tree).map(c.untypecheck(_))
-    val constructor = sym.asClass.primaryConstructor
-    val params = constructor.asMethod.typeSignature.paramLists.head.map(_.asTerm)
+
+  /** implicit conversion to construct a dependently-typed `ContextExt` with extension methods */
+  private[Macros] implicit def ext(c: blackbox.Context): ContextExt[c.type] = new ContextExt(c)
+
+  /** value class of macro extension methods */
+  case class ContextExt[Ctx <: blackbox.Context](context: Ctx) extends AnyVal {
+    import context._, universe._
     
-    val paramAnnotations = params.map { p =>
-      val annotations = p.annotations.map(_.tree).map(c.untypecheck(_))
-      q"(${p.name.decodedName.toString}, _root_.scala.List(..${annotations}))"
+    /** the adversaria package */
+    private def pkg: Tree = q"_root_.adversaria"
+   
+    /** construct a new instance of `FindMetadata` */
+    private def makeFindMetadata(paramMetadata: Tree, param: TermSymbol, ann: Tree,
+        annType: Type, typ: Type) =
+      q"""new $pkg.FindMetadata[$annType, $typ]($ann, $paramMetadata) {
+            type Return = ${param.info}
+            def get(t: $typ): ${param.info} = t.${param.name}
+          }"""
+
+    /** produces a new Tree of a `ParamMetadata` instance */
+    private def makeParamMetadata(paramName: String, annotations: List[Tree]): Tree =
+      q"new $pkg.ParamMetadata($paramName, $annotations)"
+
+    /** gets the constructor parameters from the specified type */
+    private def constParams(typ: Type): List[TermSymbol] =
+      typ.typeSymbol.asClass.primaryConstructor.asMethod.typeSignature.paramLists.head.map(_.asTerm)
+
+    /** */
+    private def paramMetadata(name: String, annotations: List[Tree]): Tree =
+      q"""$pkg.ParamMetadata($name, $annotations)"""
+
+    /** aborts the macro, reporting the error `msg` */
+    private def fail(msg: String): Nothing = abort(enclosingPosition, s"adversaria: $msg")
+
+    /** gets the untyped annotations for the given symbol */
+    private def annotations(sym: Symbol) = sym.annotations.map(_.tree).map(untypecheck(_))
+
+    /** gets a short, decoded version of a symbol's name */
+    private def shortName(sym: Symbol): String = sym.name.decodedName.toString
+
+    /** implementation of the typeMetadata macro */
+    private[Macros] def typeMetadata(typ: Type): Tree = {
+      val sym = typ.typeSymbol
+      val fullName = sym.fullName
+      
+      val paramAnnotations: List[Tree] =
+        constParams(typ).map { p => paramMetadata(shortName(p), annotations(p)) }
+      
+      q"$pkg.TypeMetadata(${shortName(sym)}, $fullName, ${annotations(sym)}, $paramAnnotations)"
     }
 
-    q"""_root_.adversaria.TypeAnnotations(
-      _root_.scala.List(..$typeAnnotations),
-      _root_.scala.collection.immutable.ListMap(..$paramAnnotations)
-    )"""
+    /** implementation of the findMetadata macro */
+    private[Macros] def findMetadata(aType: Type, tType: Type): Tree = {
+      val optParam = constParams(tType).find(_.annotations.map(_.tree).exists(_.tpe =:= aType))
+      val param = optParam.getOrElse(fail("could not find matching annotation"))
+      val annotations = param.annotations.map(_.tree)
+      val found = untypecheck(annotations.find(_.tpe =:= aType).get)
+      val name = param.name.decodedName.toString
+      val paramMetadata = makeParamMetadata(name, annotations.map(untypecheck(_)))
+      
+      makeFindMetadata(paramMetadata, param, found, aType, tType)
+    }
+
   }
 
-  def annotatedParam[A <: StaticAnnotation: c.WeakTypeTag,
-                     T: c.WeakTypeTag](c: whitebox.Context): c.Tree = {
-    import c.universe._
-    
-    val sym = c.weakTypeOf[T].typeSymbol
-    val const = sym.asClass.primaryConstructor
-    val params = const.asMethod.typeSignature.paramLists.head.map(_.asTerm)
+  /** delegates to the macro implementation method */
+  def typeMetadata[T: c.WeakTypeTag](c: blackbox.Context): c.Tree =
+    c.typeMetadata(c.weakTypeOf[T])
 
-    val param = params.find { p =>
-      val annotations = p.annotations.map(_.tree)
-      annotations.exists(_.tpe =:= c.weakTypeOf[A])
-    }.getOrElse(c.abort(c.enclosingPosition, "adversaria: could not find matching annotation"))
-
-    val annotations = param.annotations.map(_.tree)
-    val ann = c.untypecheck(annotations.find(_.tpe =:= c.weakTypeOf[A]).get)
-
-    q"""
-      new _root_.adversaria.AnnotatedParam[${weakTypeOf[A]}, ${weakTypeOf[T]}]($ann) {
-        def get(t: ${weakTypeOf[T]}): Return = t.${param.name} ; type Return = ${param.info}
-      }
-    """
-  }
+  /** delegates to the macro implementation method */
+  def findMetadata[A <: StaticAnnotation: c.WeakTypeTag,
+                     T: c.WeakTypeTag](c: whitebox.Context): c.Tree =
+    c.findMetadata(c.weakTypeOf[A], c.weakTypeOf[T])
 }
 
-object TypeAnnotations {
-  implicit def annotations[T]: TypeAnnotations[T] = macro Macros.typeAnnotations[T]
+/** companion object to `TypeMetadata`, providing the implicit macro generator of `TypeMetadata`
+ *  evidence */
+object TypeMetadata { implicit def annotations[T]: TypeMetadata[T] = macro Macros.typeMetadata[T] }
+
+/** companion object to `FindMetadata`, which provides implicit macro generator of `FindMetadata`
+ *  evidence, if it is available */
+object FindMetadata {
+  implicit def findMetadata[A <: StaticAnnotation, T]: FindMetadata[A, T] =
+    macro Macros.findMetadata[A, T]
 }
 
-object AnnotatedParam {
-  implicit def param[A <: StaticAnnotation, T]: AnnotatedParam[A, T] =
-    macro Macros.annotatedParam[A, T]
-}
+/** representation of the static metadata available on a type, including the type's name and
+ *  annotations on the type and its constructor parameters */
+case class TypeMetadata[T](typeName: String,
+                           fullTypeName: String,
+                           annotations: List[StaticAnnotation],
+                           parameters: List[ParamMetadata])
 
-case class TypeAnnotations[T](annotations: List[StaticAnnotation],
-                              parameters: ListMap[String, List[StaticAnnotation]])
-
+/** an implicitly-generated representation of a particular field in a case class found by searching
+ *  for it at compile-time by annotation */
 @implicitNotFound("adversaria: could not find a parameter annotated with type @${A}")
-abstract class AnnotatedParam[A <: StaticAnnotation, T](val annotation: A) {
+abstract class FindMetadata[A <: StaticAnnotation, T](val annotation: A,
+                                                      val parameter: ParamMetadata) {
   type Return
   def get(t: T): Return
 }
 
+case class ParamMetadata(fieldName: String, annotations: List[StaticAnnotation])

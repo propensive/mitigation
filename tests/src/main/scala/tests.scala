@@ -21,21 +21,33 @@ object Tests extends TestApp {
 
   def tests(): Unit = {
     test("get annotations on type") {
-      implicitly[TypeAnnotations[Company]].annotations
+      implicitly[TypeMetadata[Company]].annotations
     }.assert(_ == List(count(10)))
 
+    test("get the short name of the type") {
+      implicitly[TypeMetadata[Person]].typeName
+    }.assert(_ == "Person")
+    
+    test("get the full name of the type") {
+      implicitly[TypeMetadata[Person]].fullTypeName
+    }.assert(_ == "adversaria.tests.Person")
+    
     test("find the field with a particular annotation") {
-      val ann = implicitly[AnnotatedParam[id, Person]]
+      val ann = implicitly[FindMetadata[id, Person]]
       val person = Person("John Smith", "test@example.com")
       ann.get(person)
     }.assert(_ == "test@example.com")
     
+    test("check the name of the field found by an annotation") {
+      implicitly[FindMetadata[id, Person]].parameter.fieldName
+    }.assert(_ == "email")
+    
     test("check that implicit for missing annotation is not resolved") {
-      scalac"implicitly[AnnotatedParam[id, Company]]"
+      scalac"implicitly[FindMetadata[id, Company]]"
     }.assert(_ == TypecheckError("adversaria: could not find a parameter annotated with type @adversaria.tests.id"))
 
     test("extract annotation value generically") {
-      def getId[T](value: T)(implicit anns: AnnotatedParam[id, T]): String =
+      def getId[T](value: T)(implicit anns: FindMetadata[id, T]): String =
         anns.get(value).toString
 
       getId(Employee(Person("John Smith", "test@example.com"), 3141592))
