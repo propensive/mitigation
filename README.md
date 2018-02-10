@@ -51,31 +51,35 @@ case class Person(name: String, @id email: String)
 ```
 
 Perhaps we would like to find out the annotations on `Company`. We can get this
-information by requesting an implicit `TypeAnnotations[Company]` value, and
+information by requesting an implicit `TypeMetadata[Company]` value, and
 accessing its `annotations` field, like so,
+
 ```scala
-val info = implicitly[TypeAnnotations[Company]]
+val info = implicitly[TypeMetadata[Company]]
 println(info.annotations)
 
 > List(count(10))
 ```
 
-The `TypeAnnotations` implicit should resolve for any type, regardless of
+The `TypeMetadata` implicit should resolve for any type, regardless of
 whether it has any annotations or not.
 
 Another supported use case is to find the field of a case class which has been
 annotated with a particular annotation, if and only if that annotation exists.
-We use the `AnnotatedParam` typeclass for this. It takes two type parameters:
+We use the `FindMetadata` typeclass for this. It takes two type parameters:
 the type of the annotation, and the type to check, respectively,
+
 ```scala
-val idField = implicitly[AnnotatedParam[id, Person]]
+val idField = implicitly[FindMetadata[id, Person]]
 println(idField.get(Person("John Smith", "test@example.com)))
 
 > test@example.com
 ```
-However, attempting to resolve such an implicit on a case class which has no field annotated with that annotation will fail at compile-time:
+However, attempting to resolve such an implicit on a case class which has no
+field annotated with that annotation will fail at compile-time:
+
 ```scala
-val idField = implicitly[AnnotatedParam[id, Company]]
+val idField = implicitly[FindMetadata[id, Company]]
 
 ! adversaria: could not find a parameter annotated with type @id
 ```

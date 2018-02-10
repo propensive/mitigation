@@ -32,7 +32,6 @@ lazy val buildSettings = Seq(
     "-feature",
     "-Xfuture",
     "-Xexperimental",
-    "-Ywarn-value-discard",
     "-Ywarn-dead-code",
     "-Ywarn-nullary-unit",
     "-Ywarn-inaccessible",
