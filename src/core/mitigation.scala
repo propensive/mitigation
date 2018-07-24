@@ -20,6 +20,9 @@
 
 package mitigation
 
+import scala.collection.generic.CanBuildFrom
+import scala.collection.mutable.Builder
+
 import language.higherKinds
 import language.existentials
 import language.implicitConversions
@@ -32,6 +35,7 @@ import scala.util._, control.NonFatal
 import scala.annotation.unchecked.uncheckedVariance
 
 object `package` {
+  implicit class Unitise[T](value: T) { def unit(): Unit = () }
   implicit def mitigate[T, E <: Base](block: => T): Mitigable[T, E] =
     new Mitigable(() => block)
 
@@ -44,6 +48,17 @@ object `package` {
 
   def otherwise(implicit key: ident.Key[Surprise[_], _]): OfType[Surprise[_], key.Value, ident.type] =
     totalitarian.ident.on[Surprise[_]]
+  
+  implicit class Sequenceable[Coll[A] <: Traversable[A], T, E <: Base]
+                             (coll: Coll[Result[T, E]]) {
+    def sequence(implicit cbf: CanBuildFrom[Nothing, T, Coll[T]]) = Result.sequence(coll)
+  }
+  
+  implicit class Ascription[T]
+                           (option: Option[T]) {
+    def ascribe[E <: Throwable: TypeId](exception: E): Result[T, ~ | E] =
+      Result.ascribe[T, E](exception)(option)
+  }
 }
 
 object Mitigable {
@@ -93,10 +108,15 @@ object Result extends Result_1 {
       case Some(value) => Answer(value)
     }
 
-  def sequence[T, E <: Base](xs: List[Result[T, E]]): Result[List[T], E] =
-    xs.foldLeft(Answer(List[T]()): Result[List[T], E]) { case (acc, next) =>
-      acc.flatMap { list => next.map(_ :: list) }
-    }.map(_.reverse)
+  def sequence[T, E <: Base, Coll[A] <: Traversable[A]]
+              (xs: Coll[Result[T, E]])
+              (implicit cbf: CanBuildFrom[Nothing, T, Coll[T]])
+              : Result[Coll[T], E] = {
+    val builder = cbf()
+    (xs.foldLeft(Answer(()): Result[Unit, E]) { case (acc, next) =>
+      acc.flatMap { _ => next.map { e => builder += e } }
+    }).map { _ => builder.result }
+  }
 
   def expect[T, E <: Base](result: => Result[T, E]): Result[T, E] =
     try result catch { case NonFatal(exception) => Surprise(exception) }
