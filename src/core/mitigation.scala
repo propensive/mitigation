@@ -21,12 +21,9 @@
 package mitigation
 
 import scala.collection.generic.CanBuildFrom
-import scala.collection.mutable.Builder
 
 import language.higherKinds
-import language.existentials
 import language.implicitConversions
-import language.experimental.macros
 
 import totalitarian._, ident.Disjunct
 
@@ -56,7 +53,7 @@ object `package` {
   
   implicit class Ascription[T]
                            (option: Option[T]) {
-    def ascribe[E <: Throwable: TypeId](exception: E): Result[T, ~ | E] =
+    def ascribe[E <: Throwable: TypeId](exception: => E): Result[T, ~ | E] =
       Result.ascribe[T, E](exception)(option)
   }
 }

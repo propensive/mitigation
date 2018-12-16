@@ -20,7 +20,6 @@
 
 package mitigation
 
-import language.experimental.macros
 import scala.reflect.macros.whitebox
 
 import totalitarian._
