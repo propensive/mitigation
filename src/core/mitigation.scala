@@ -204,6 +204,13 @@ sealed trait Result[+Type, -E <: Base] {
   def errata: List[Disjunct[E]]
   def exceptions: List[Throwable] = errata.map(_.value match { case e: Throwable => e })
 
+  def toTry: Try[Type] = this match {
+    case Answer(value) => Success(value)
+    case Errata(oldValue, initial, ensuing @ _*) => Failure(initial.value.asInstanceOf[Throwable])
+    case Surprise(error) => Failure(error)
+    case Aborted(terminal, preceding @ _*) => Failure(terminal.value.asInstanceOf[Throwable])
+  }
+
   // replaces any sort of failure
   def remedy[T >: Type](value: => T): Result[T, Base] = this match {
     case Answer(value) => Answer(value)
